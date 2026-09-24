@@ -1,0 +1,22 @@
+@startuml despliegue
+title RutaViva - Despliegue propuesto para escalar
+skinparam shadowing false
+node "Navegador del operador" {
+  artifact "index.html"
+}
+node "Balanceador de carga" as lb
+node "Contenedor Node.js x N" as app {
+  artifact "RouteEngine"
+}
+node "Redis" as redis {
+  database "Caché de rutas\ncompartida"
+}
+node "Broker de eventos\n(Redis Pub/Sub o Kafka)" as broker
+node "Fuente de tráfico\n(sensores, reportes)" as feed
+"index.html" --> lb : HTTPS + SSE
+lb --> app
+app --> redis : clave from>to@version
+feed --> broker : eventos
+broker --> app : TrafficService.notify
+note bottom of app : El prototipo corre en un solo proceso.\nEste diagrama muestra la evolución\npara escalar horizontalmente.
+@enduml

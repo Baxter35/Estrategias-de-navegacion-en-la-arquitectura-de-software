@@ -1,0 +1,51 @@
+@startuml actividad
+title RutaViva - Actividad del despacho con re-enrutamiento
+skinparam shadowing false
+
+|Operador|
+start
+:Marcar base y hospital;
+:Elegir algoritmo;
+|Sistema|
+:Buscar ruta en caché;
+if (¿Existe con la versión actual del grafo?) then (sí)
+  :Devolver ruta cacheada;
+else (no)
+  if (¿Viaje menor a 600 m?) then (sí)
+    :Dijkstra;
+  elseif (¿Hay heurística geométrica?) then (sí)
+    :A*;
+  else (no)
+    :Dijkstra bidireccional;
+  endif
+  :Guardar en caché;
+endif
+:Generar instrucciones giro a giro;
+|Operador|
+:Iniciar despacho;
+|Sistema|
+repeat
+  :Avanzar una intersección;
+  fork
+    |Servicio de tráfico|
+    if (¿Llega un evento de tráfico?) then (sí)
+      :Actualizar grafo (version++);
+      :Notificar observadores;
+    endif
+  fork again
+    |Sistema|
+    if (¿El evento afecta la ruta restante?) then (sí)
+      :Recalcular desde la posición actual;
+      if (¿Existe ruta?) then (no)
+        :Estado NO_ROUTE;
+        stop
+      endif
+      :Actualizar mapa y medir latencia;
+    endif
+  end fork
+  |Sistema|
+repeat while (¿Llegó al hospital?) is (no)
+->sí;
+:Estado ARRIVED;
+stop
+@enduml

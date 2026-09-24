@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RutaViva: consola de despacho</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚑</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #e7ecf0;
+    --street: #bcc6cf;
+    --avenue: #8e9dab;
+    --panel: #ffffff;
+    --ink: #17222c;
+    --ink-soft: #5a6874;
+    --line: #d6dde3;
+    --siren-red: #c8102e;
+    --siren-blue: #2f6fa8;
+    --reflective: #ffc20e;
+    --amber: #d9730d;
+    --ok: #1f7a4d;
+    --font: "Barlow", "Segoe UI", system-ui, sans-serif;
+    --font-sign: "Barlow Condensed", "Arial Narrow", "Segoe UI", system-ui, sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #141a20; --street: #313c47; --avenue: #4d5c6b; --panel: #1b232b;
+      --ink: #e8eef3; --ink-soft: #9aa8b4; --line: #2c3742;
+      --siren-red: #ff4d5e; --siren-blue: #5da9e9; --amber: #f59e0b; --ok: #3fbf7f;
+    }
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--ground); color: var(--ink); font-family: var(--font);
+    font-size: 15px; line-height: 1.45;
+    display: grid; grid-template-columns: 1fr minmax(320px, 380px);
+  }
+  #map-wrap { position: relative; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #hint {
+    position: absolute; left: 16px; bottom: 16px; max-width: 34ch;
+    background: var(--panel); border-left: 4px solid var(--reflective);
+    padding: 8px 12px; font-size: 14px; border-radius: 2px;
+  }
+  #toast {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+    background: var(--siren-red); color: #fff; padding: 10px 16px; border-radius: 3px;
+    font-family: var(--font-sign); font-size: 18px; letter-spacing: .01em;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+    max-width: calc(100% - 32px); text-align: center;
+  }
+  #toast.show { opacity: 1; }
+  aside {
+    background: var(--panel); border-left: 1px solid var(--line);
+    overflow-y: auto; padding: 20px 20px 32px;
+  }
+  h1 {
+    font-family: var(--font-sign); font-weight: 700; font-size: 34px; line-height: 1;
+    margin: 0 0 4px; letter-spacing: -.01em;
+  }
+  h1 .plate {
+    display: inline-block; background: var(--siren-red); color: #fff;
+    padding: 2px 8px 0; margin-right: 6px; border-radius: 3px;
+  }
+  .lede { color: var(--ink-soft); margin: 0 0 18px; }
+  ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+  ol.steps > li { counter-increment: s; padding: 14px 0 16px 38px; position: relative; border-top: 1px solid var(--line); }
+  ol.steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: 13px; width: 26px; height: 26px;
+    display: grid; place-items: center; border-radius: 50%;
+    border: 2px solid var(--ink); font-family: var(--font-sign); font-weight: 700;
+  }
+  h2 { font-family: var(--font-sign); font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .seg label {
+    font: 600 14px/1 var(--font); color: var(--ink); background: transparent;
+    border: 1.5px solid var(--ink); border-radius: 3px; padding: 9px 12px; cursor: pointer;
+  }
+  button.primary { background: var(--ink); color: var(--panel); }
+  button.danger { border-color: var(--siren-red); color: var(--siren-red); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button:focus-visible, .seg input:focus-visible + span { outline: 3px solid var(--reflective); outline-offset: 2px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .seg label { padding: 0; border-width: 1.5px; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg span { display: block; padding: 8px 10px; }
+  .seg input:checked + span { background: var(--siren-blue); color: #fff; }
+  .pins { font-size: 14px; color: var(--ink-soft); margin: 0; }
+  .pins b { color: var(--ink); font-weight: 600; }
+  dl.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 8px; margin: 12px 0 0; }
+  dl.stats div { min-width: 0; }
+  dt { font-size: 12px; color: var(--ink-soft); }
+  dd { margin: 0; font-family: var(--font-sign); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; margin-top: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-weight: 600; color: var(--ink-soft); font-size: 12px; }
+  tr.best td { font-weight: 600; color: var(--ok); }
+  .state {
+    display: inline-block; font-family: var(--font-sign); font-weight: 600; font-size: 15px;
+    padding: 3px 8px 1px; border-radius: 3px; background: var(--line); margin-left: 6px; vertical-align: 2px;
+  }
+  .state[data-s="NAVIGATING"] { background: var(--siren-blue); color: #fff; }
+  .state[data-s="REROUTING"] { background: var(--reflective); color: #17222c; }
+  .state[data-s="ARRIVED"] { background: var(--ok); color: #fff; }
+  .state[data-s="NO_ROUTE"] { background: var(--siren-red); color: #fff; }
+  ul.turns { list-style: none; padding: 0; margin: 10px 0 0; max-height: 210px; overflow-y: auto; }
+  ul.turns li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  ul.turns li:first-child { font-weight: 600; }
+  ul.turns .arrow { font-size: 18px; line-height: 1; text-align: center; color: var(--siren-blue); }
+  #log { font-size: 13px; color: var(--ink-soft); margin: 10px 0 0; padding-left: 18px; }
+  #log li { margin-bottom: 3px; }
+  #log li.rr { color: var(--siren-red); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-soft); margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .legend i { display: inline-block; width: 18px; height: 4px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+  .muted { color: var(--ink-soft); font-size: 14px; margin: 6px 0 0; }
+  @media (max-width: 820px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 58vh auto; height: auto; }
+    aside { border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+</style>
+</head>
+<body>
+<div id="map-wrap">
+  <canvas id="map" aria-label="Mapa de la ciudad. Haga clic para marcar la base y el hospital."></canvas>
+  <div id="hint">Haga clic en el mapa para marcar la base de la ambulancia.</div>
+  <div id="toast" role="status" aria-live="assertive"></div>
+</div>
+
+<aside>
+  <h1><span class="plate">RutaViva</span></h1>
+  <p class="lede">Despacho de ambulancias con rutas que se recalculan solas cuando cambia el tráfico.</p>
+
+  <ol class="steps">
+    <li>
+      <h2>Marque el viaje</h2>
+      <p class="pins">Base: <b id="pin-a">sin marcar</b><br>Hospital: <b id="pin-b">sin marcar</b></p>
+      <p class="muted">El primer clic marca la base y el segundo el hospital.</p>
+    </li>
+    <li>
+      <h2>Calcule la ruta</h2>
+      <div class="seg" role="radiogroup" aria-label="Algoritmo">
+        <label><input type="radio" name="alg" value="adaptive" checked><span>Adaptativo</span></label>
+        <label><input type="radio" name="alg" value="astar"><span>A*</span></label>
+        <label><input type="radio" name="alg" value="dijkstra"><span>Dijkstra</span></label>
+        <label><input type="radio" name="alg" value="bidirectional"><span>Bidireccional</span></label>
+      </div>
+      <div class="row">
+        <button class="primary" id="btn-route" disabled>Calcular ruta</button>
+        <button id="btn-compare" disabled>Comparar algoritmos</button>
+      </div>
+      <dl class="stats" id="stats" hidden>
+        <div><dt>Llegada estimada</dt><dd id="s-eta">–</dd></div>
+        <div><dt>Distancia</dt><dd id="s-dist">–</dd></div>
+        <div><dt>Cálculo</dt><dd id="s-ms">–</dd></div>
+        <div><dt>Nodos explorados</dt><dd id="s-exp">–</dd></div>
+        <div style="grid-column: span 2"><dt>Algoritmo usado</dt><dd id="s-alg">–</dd></div>
+      </dl>
+      <div class="table-wrap" id="compare" hidden></div>
+    </li>
+    <li>
+      <h2>Despache la ambulancia <span class="state" id="state" data-s="IDLE">En espera</span></h2>
+      <div class="row">
+        <button class="primary" id="btn-go" disabled>Iniciar despacho</button>
+        <button id="btn-pause" disabled>Pausar</button>
+      </div>
+      <ul class="turns" id="turns"></ul>
+    </li>
+    <li>
+      <h2>Simule un incidente</h2>
+      <div class="row">
+        <button class="danger" id="btn-block" disabled>Cerrar vía adelante</button>
+        <button id="btn-jam" disabled>Congestión adelante</button>
+        <button id="btn-undo">Deshacer</button>
+      </div>
+      <p class="muted">También puede cerrar cualquier vía con Mayús + clic sobre ella.</p>
+      <ol id="log" reversed></ol>
+    </li>
+  </ol>
+
+  <div class="legend" aria-label="Leyenda">
+    <span><i style="background:var(--siren-red)"></i>Ruta</span>
+    <span><i style="background:var(--siren-blue);opacity:.6"></i>Explorado</span>
+    <span><i style="background:var(--amber)"></i>Congestión</span>
+    <span><i style="background:var(--ink)"></i>Vía cerrada</span>
+    <span><i style="background:var(--reflective)"></i>Ambulancia</span>
+  </div>
+</aside>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const canvas = $("map");
+const ctx = canvas.getContext("2d");
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const app = {
+  nodes: new Map(), edges: new Map(), edgeList: [],
+  origin: null, dest: null,
+  explored: [], exploredShown: 0, route: [], traveled: [],
+  session: null, timer: null, paused: false,
+  view: { scale: 1, ox: 0, oy: 0 },
+};
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error del servidor");
+  return data;
+}
+
+// ---------- Mapa ----------
+async function loadGraph() {
+  const g = await api("/api/graph");
+  for (const [id, x, y] of g.nodes) app.nodes.set(id, { x, y });
+  for (const e of g.edges) {
+    app.edgeList.push(e);
+    app.edges.set(e.id, e);
+    app.edges.set(`${e.to}-${e.from}`, e);
+  }
+  resize();
+}
+
+function resize() {
+  const dpr = devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  let maxX = 0, maxY = 0;
+  for (const n of app.nodes.values()) { maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y); }
+  const pad = 28;
+  const scale = Math.min((r.width - pad * 2) / maxX, (r.height - pad * 2) / maxY);
+  app.view = { scale, ox: (r.width - maxX * scale) / 2, oy: (r.height - maxY * scale) / 2 };
+  draw();
+}
+const P = (id) => { const n = app.nodes.get(id); return [app.view.ox + n.x * app.view.scale, app.view.oy + n.y * app.view.scale]; };
+
+function strokeEdge(e) { const [x1, y1] = P(e.from), [x2, y2] = P(e.to); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
+function polyline(path) { path.forEach((id, i) => { const [x, y] = P(id); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); }
+
+function draw() {
+  const r = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, r.width, r.height);
+  const s = app.view.scale;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+  // Calles y avenidas
+  for (const [color, w, test] of [[css("--street"), 1.4, (e) => e.speed < 60], [css("--avenue"), 3.5, (e) => e.speed >= 60]]) {
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = w;
+    for (const e of app.edgeList) if (test(e) && !e.blocked) strokeEdge(e);
+    ctx.stroke();
+  }
+  // Congestión
+  for (const e of app.edgeList) {
+    if (e.blocked || e.traffic < 1.5) continue;
+    ctx.beginPath(); ctx.strokeStyle = css("--amber"); ctx.globalAlpha = Math.min(1, (e.traffic - 1) / 2);
+    ctx.lineWidth = 3; strokeEdge(e); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // Nodos explorados por el algoritmo
+  ctx.fillStyle = css("--siren-blue"); ctx.globalAlpha = .45;
+  const rad = Math.max(3, s * 60);
+  for (let i = 0; i < app.exploredShown; i++) { const [x, y] = P(app.explored[i]); ctx.fillRect(x - rad / 2, y - rad / 2, rad, rad); }
+  ctx.globalAlpha = 1;
+  // Ruta con borde blanco, como en un navegador real
+  if (app.route.length > 1) {
+    ctx.beginPath(); polyline(app.route); ctx.strokeStyle = css("--ground"); ctx.lineWidth = 9; ctx.stroke();
+    ctx.beginPath(); polyline(app.route); ctx.strokeStyle = css("--siren-red"); ctx.lineWidth = 5; ctx.stroke();
+  }
+  if (app.traveled.length > 1) {
+    ctx.beginPath(); polyline(app.traveled); ctx.strokeStyle = css("--ink-soft"); ctx.lineWidth = 4; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // Vías cerradas
+  for (const e of app.edgeList) {
+    if (!e.blocked) continue;
+    const [x1, y1] = P(e.from), [x2, y2] = P(e.to), mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    ctx.beginPath(); ctx.strokeStyle = css("--ink"); ctx.lineWidth = 5; strokeEdge(e); ctx.stroke();
+    ctx.beginPath(); ctx.strokeStyle = css("--siren-red"); ctx.lineWidth = 3; const k = 7;
+    ctx.moveTo(mx - k, my - k); ctx.lineTo(mx + k, my + k); ctx.moveTo(mx + k, my - k); ctx.lineTo(mx - k, my + k); ctx.stroke();
+  }
+  // Marcadores
+  if (app.dest != null) marker(app.dest, css("--siren-red"), "H");
+  if (app.origin != null) marker(app.origin, css("--ink"), "B");
+  if (app.session) vehicle(app.session.current);
+}
+
+function marker(id, color, letter) {
+  const [x, y] = P(id);
+  ctx.fillStyle = color; ctx.fillRect(x - 11, y - 11, 22, 22);
+  ctx.fillStyle = css("--panel"); ctx.font = `700 15px ${css("--font-sign")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(letter, x, y + 1);
+}
+function vehicle(id) {
+  const [x, y] = P(id);
+  ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = css("--reflective"); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#17222c"; ctx.stroke();
+}
+
+function nearestNode(px, py) {
+  let best = null, bd = Infinity;
+  for (const [id] of app.nodes) { const [x, y] = P(id); const d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = id; } }
+  return best;
+}
+function nearestEdge(px, py) {
+  let best = null, bd = Infinity;
+  for (const e of app.edgeList) {
+    const [x1, y1] = P(e.from), [x2, y2] = P(e.to), dx = x2 - x1, dy = y2 - y1;
+    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
+    const d = (x1 + t * dx - px) ** 2 + (y1 + t * dy - py) ** 2;
+    if (d < bd) { bd = d; best = e; }
+  }
+  return bd < 400 ? best : null;
+}
+
+// ---------- Interacción ----------
+const algName = (a = "") => a.replace(/^adaptive→/, "Adaptativo → ").replace("dijkstra", "Dijkstra").replace("astar", "A*").replace("bidirectional", "Bidireccional").replace(/^adaptive$/, "Adaptativo");
+const alg = () => document.querySelector("input[name=alg]:checked").value;
+const fmtTime = (s) => s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${Math.round(s)} s`;
+const fmtDist = (m) => m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
+
+canvas.addEventListener("click", async (ev) => {
+  const r = canvas.getBoundingClientRect();
+  const px = ev.clientX - r.left, py = ev.clientY - r.top;
+  if (ev.shiftKey) {
+    const e = nearestEdge(px, py);
+    if (e) await safe(() => api("/api/traffic/block", { edgeId: e.id }));
+    return;
+  }
+  if (app.session && app.session.state === "NAVIGATING") return;
+  const id = nearestNode(px, py);
+  if (app.origin == null || app.dest != null) { resetTrip(); app.origin = id; $("hint").textContent = "Ahora haga clic donde está el hospital."; }
+  else { app.dest = id; $("hint").textContent = "Elija un algoritmo y calcule la ruta."; }
+  $("pin-a").textContent = app.origin != null ? `nodo ${app.origin}` : "sin marcar";
+  $("pin-b").textContent = app.dest != null ? `nodo ${app.dest}` : "sin marcar";
+  const ready = app.origin != null && app.dest != null;
+  $("btn-route").disabled = $("btn-compare").disabled = $("btn-go").disabled = !ready;
+  draw();
+});
+
+function resetTrip() {
+  stopDriving();
+  app.origin = app.dest = app.session = null;
+  app.route = []; app.traveled = []; app.explored = []; app.exploredShown = 0;
+  $("stats").hidden = $("compare").hidden = true;
+  $("turns").innerHTML = "";
+  setState("IDLE");
+}
+
+$("btn-route").onclick = () => safe(async () => {
+  const r = await api("/api/route", { from: app.origin, to: app.dest, algorithm: alg(), animate: true });
+  if (!r.found) return toast("No hay ruta posible con las vías cerradas");
+  app.explored = r.explored || []; app.route = []; app.exploredShown = 0;
+  await animateExploration();
+  app.route = r.path;
+  showStats(r);
+  renderTurns(r.instructions);
+  draw();
+});
+
+function animateExploration() {
+  return new Promise((done) => {
+    if (reduceMotion) { app.exploredShown = app.explored.length; draw(); return done(); }
+    const total = app.explored.length, t0 = performance.now(), dur = Math.min(1600, 300 + total * 0.6);
+    const tick = (t) => {
+      app.exploredShown = Math.min(total, Math.round(total * ((t - t0) / dur)));
+      draw();
+      app.exploredShown < total ? requestAnimationFrame(tick) : done();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+function showStats(r) {
+  $("stats").hidden = false;
+  $("s-eta").textContent = fmtTime(r.cost);
+  $("s-dist").textContent = fmtDist(r.distance);
+  $("s-ms").textContent = `${r.timeMs.toFixed(2)} ms`;
+  $("s-exp").textContent = r.expanded.toLocaleString("es");
+  $("s-alg").textContent = algName(r.algorithm);
+}
+
+$("btn-compare").onclick = () => safe(async () => {
+  const rows = await api("/api/compare", { from: app.origin, to: app.dest });
+  const minExp = Math.min(...rows.map((r) => r.expanded));
+  $("compare").hidden = false;
+  $("compare").innerHTML = `<table><thead><tr><th>Algoritmo</th><th>Tiempo</th><th>Explorados</th><th>Llegada</th></tr></thead><tbody>${
+    rows.map((r) => `<tr class="${r.expanded === minExp ? "best" : ""}"><td>${algName(r.algorithm)}</td><td>${r.timeMs.toFixed(2)} ms</td><td>${r.expanded.toLocaleString("es")}</td><td>${fmtTime(r.cost)}</td></tr>`).join("")
+  }</tbody></table><p class="muted">Todos llegan igual de rápido; cambia cuánto trabajo cuesta encontrar la ruta.</p>`;
+});
+
+$("btn-go").onclick = () => safe(async () => {
+  app.explored = []; app.exploredShown = 0;
+  const s = await api("/api/navigation", { from: app.origin, to: app.dest, algorithm: alg() });
+  applySession(s);
+  if (s.state !== "NAVIGATING") return toast("No hay ruta posible");
+  $("btn-go").disabled = true;
+  $("btn-pause").disabled = $("btn-block").disabled = $("btn-jam").disabled = false;
+  $("hint").textContent = "Pruebe cerrar una vía: la ruta se recalcula sola.";
+  startDriving();
+});
+
+function startDriving() {
+  stopDriving(); app.paused = false; $("btn-pause").textContent = "Pausar";
+  app.timer = setInterval(() => safe(async () => {
+    const s = await api(`/api/navigation/${app.session.id}/advance`, {});
+    applySession(s);
+    if (s.state !== "NAVIGATING") {
+      stopDriving();
+      $("btn-block").disabled = $("btn-jam").disabled = $("btn-pause").disabled = true;
+      if (s.state === "ARRIVED") { toast(`Ambulancia en el hospital con ${s.reroutes.length} recálculos`); log(`Llegada al hospital`); }
+    }
+  }), 450);
+}
+function stopDriving() { clearInterval(app.timer); app.timer = null; }
+$("btn-pause").onclick = () => {
+  if (app.timer) { stopDriving(); app.paused = true; $("btn-pause").textContent = "Reanudar"; }
+  else startDriving();
+};
+
+function applySession(s) {
+  app.session = s;
+  app.route = s.remainingPath;
+  app.traveled = s.traveled;
+  setState(s.state);
+  renderTurns(s.instructions);
+  $("stats").hidden = false;
+  $("s-eta").textContent = fmtTime(s.remainingCost);
+  $("s-alg").textContent = algName(s.algorithm);
+  draw();
+}
+
+function aheadEdge(k = 3) {
+  const p = app.session?.remainingPath || [];
+  if (p.length < 3) return null;
+  const i = Math.min(k, p.length - 2);
+  return `${p[i]}-${p[i + 1]}`;
+}
+$("btn-block").onclick = () => safe(async () => { const id = aheadEdge(); if (id) await api("/api/traffic/block", { edgeId: id }); });
+$("btn-jam").onclick = () => safe(async () => { const id = aheadEdge(2); if (id) await api("/api/traffic/congestion", { edgeId: id, factor: 4 }); });
+$("btn-undo").onclick = () => safe(async () => {
+  const r = await api("/api/commands/undo", {});
+  log(r.undone ? `Deshecho: ${r.undone}` : "No hay acciones para deshacer");
+  if (app.session) applySession(await api(`/api/navigation/${app.session.id}`));
+});
+
+const stateNames = { IDLE: "En espera", CALCULATING: "Calculando", NAVIGATING: "En ruta", REROUTING: "Recalculando", ARRIVED: "Llegó", NO_ROUTE: "Sin ruta" };
+function setState(s) { $("state").dataset.s = s; $("state").textContent = stateNames[s] || s; }
+
+const arrows = { start: "↑", left: "↰", right: "↱", straight: "↑", arrive: "⚑" };
+function renderTurns(list) {
+  $("turns").innerHTML = (list || []).slice(0, 30).map((i) => `<li><span class="arrow" aria-hidden="true">${arrows[i.maneuver]}</span><span>${i.text}</span></li>`).join("");
+}
+
+function log(text, cls = "") {
+  const li = document.createElement("li"); li.textContent = text; if (cls) li.className = cls;
+  $("log").prepend(li);
+  while ($("log").children.length > 8) $("log").lastChild.remove();
+}
+let toastTimer;
+function toast(msg) {
+  $("toast").textContent = msg; $("toast").classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $("toast").classList.remove("show"), 3200);
+}
+async function safe(fn) { try { await fn(); } catch (e) { toast(e.message); } }
+
+// ---------- Tiempo real (SSE): el navegador también es un observador ----------
+const events = new EventSource("/api/events");
+events.addEventListener("traffic", (ev) => {
+  const d = JSON.parse(ev.data);
+  for (const e of d.edges) { const rec = app.edges.get(e.id); if (rec) { rec.blocked = e.blocked; rec.traffic = e.trafficFactor; } }
+  const street = app.edges.get(d.edges[0]?.id)?.street ?? "";
+  const labels = { blocked: "Vía cerrada", congestion: "Congestión", cleared: "Vía restablecida" };
+  log(`${labels[d.type]}: ${street}`);
+  draw();
+});
+events.addEventListener("reroute", (ev) => {
+  const { info, session } = JSON.parse(ev.data);
+  if (!app.session || session.id !== app.session.id) return;
+  applySession(session);
+  const delta = info.newCost - info.previousCost;
+  const deltaTxt = Math.abs(delta) < 1 ? "sin retraso" : delta > 0 ? `+${fmtTime(delta)}` : `${fmtTime(-delta)} más rápido`;
+  toast(`Ruta recalculada en ${info.latencyMs.toFixed(1)} ms, ${deltaTxt}`);
+  log(`${info.reason} → nueva ruta en ${info.latencyMs.toFixed(1)} ms`, "rr");
+});
+
+addEventListener("resize", resize);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+loadGraph().catch((e) => toast("No se pudo cargar el mapa: " + e.message));
+</script>
+</body>
+</html>

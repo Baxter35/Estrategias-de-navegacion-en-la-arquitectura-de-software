@@ -1,0 +1,15 @@
+@startuml estados
+title RutaViva - Máquina de estados de NavigationSession
+skinparam shadowing false
+[*] --> IDLE
+IDLE --> CALCULATING : start()
+CALCULATING --> NAVIGATING : ruta encontrada
+CALCULATING --> NO_ROUTE : destino inalcanzable
+NAVIGATING --> NAVIGATING : advance()
+NAVIGATING --> REROUTING : evento de tráfico\nen la ruta restante
+REROUTING --> NAVIGATING : nueva ruta\n(o se conserva si no mejora)
+REROUTING --> NO_ROUTE : sin alternativa
+NAVIGATING --> ARRIVED : current == destino
+ARRIVED --> [*]
+NO_ROUTE --> [*]
+@enduml

@@ -1,0 +1,157 @@
+@startuml clases
+title RutaViva - Diagrama de clases
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package domain {
+  class Graph {
+    -version: number
+    +addNode(n)
+    +addEdge(e): Edge
+    +outgoing(id): Edge[]
+    +incoming(id): Edge[]
+    +cost(e): number
+    +nominalCost(e): number
+    +updateEdge(id, patch): Edge[]
+  }
+  class Edge <<struct>> {
+    +id: string
+    +length: number
+    +speedKmh: number
+    +street: string
+    +trafficFactor: number
+    +blocked: boolean
+  }
+  Graph "1" *-- "*" Edge
+}
+
+package strategies {
+  interface RouteStrategy <<Strategy>> {
+    +name: string
+    +findRoute(g, from, to, opt): SearchResult
+  }
+  abstract class BestFirstStrategy <<Template Method>> {
+    +findRoute(...)
+    #{abstract} heuristic(g, n, t): number
+  }
+  class DijkstraStrategy
+  class AStarStrategy
+  class BidirectionalStrategy
+  class AdaptiveStrategy <<Strategy de Strategies>> {
+    -shortTripMeters: number
+    +select(g, from, to): RouteStrategy
+  }
+  RouteStrategy <|.. BestFirstStrategy
+  BestFirstStrategy <|-- DijkstraStrategy
+  BestFirstStrategy <|-- AStarStrategy
+  RouteStrategy <|.. BidirectionalStrategy
+  RouteStrategy <|.. AdaptiveStrategy
+  AdaptiveStrategy o-- "3" RouteStrategy
+}
+
+package cache {
+  class CachedRouteStrategy <<Decorator>> {
+    -cache: Map (LRU)
+    +hits: number
+    +misses: number
+  }
+  RouteStrategy <|.. CachedRouteStrategy
+  CachedRouteStrategy o-- "1" RouteStrategy : inner
+}
+
+package traffic {
+  interface TrafficObserver <<Observer>> {
+    +onTrafficUpdate(ev)
+  }
+  class TrafficService <<Subject>> {
+    +subscribe(o)
+    +blockRoad(id)
+    +setCongestion(id, f)
+    +restore(id, state)
+  }
+  TrafficService o-- "*" TrafficObserver
+}
+
+package navigation {
+  enum NavigationState {
+    IDLE
+    CALCULATING
+    NAVIGATING
+    REROUTING
+    ARRIVED
+    NO_ROUTE
+  }
+  class NavigationSession {
+    +state: NavigationState
+    +current: number
+    +start()
+    +advance(): boolean
+    +retreat()
+    -recalculate(reason)
+  }
+  TrafficObserver <|.. NavigationSession
+  NavigationSession --> RouteStrategy
+  NavigationSession --> NavigationState
+}
+
+package route {
+  interface RouteComponent <<Composite>> {
+    +getDistance()
+    +getDuration()
+    +getSegments()
+  }
+  class Segment <<Leaf>>
+  class StreetLeg
+  class Route {
+    +{static} fromEdges(g, edges)
+    +[Symbol.iterator]()
+  }
+  class TurnByTurnIterator <<Iterator>> {
+    +next(): Instruction
+  }
+  RouteComponent <|.. Segment
+  RouteComponent <|.. StreetLeg
+  RouteComponent <|.. Route
+  StreetLeg o-- "*" Segment
+  Route o-- "*" StreetLeg
+  Route ..> TurnByTurnIterator : crea
+}
+
+package commands {
+  interface Command <<Command>> {
+    +execute()
+    +undo()
+  }
+  class BlockRoadCommand
+  class CongestionCommand
+  class AdvanceCommand
+  class CommandInvoker {
+    -history: Command[]
+    +log: LogEntry[]
+    +run(c)
+    +undo()
+  }
+  Command <|.. BlockRoadCommand
+  Command <|.. CongestionCommand
+  Command <|.. AdvanceCommand
+  CommandInvoker o-- "*" Command
+  BlockRoadCommand --> TrafficService
+  CongestionCommand --> TrafficService
+  AdvanceCommand --> NavigationSession
+}
+
+class RouteEngine <<Facade>> {
+  +findRoute(from, to, alg)
+  +compare(from, to)
+  +startNavigation(from, to)
+  +blockRoad(id)
+  +undo()
+  +metrics()
+}
+RouteEngine --> Graph
+RouteEngine *-- TrafficService
+RouteEngine *-- CommandInvoker
+RouteEngine *-- "4" CachedRouteStrategy
+RouteEngine *-- "*" NavigationSession
+@enduml

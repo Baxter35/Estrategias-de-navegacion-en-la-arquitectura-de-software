@@ -1,0 +1,65 @@
+@startuml secuencia
+title RutaViva - Despacho y re-enrutamiento ante cierre vial
+autonumber
+skinparam shadowing false
+
+actor Operador
+participant "Cliente web" as UI
+participant "API REST" as API
+participant "RouteEngine\n«Facade»" as E
+participant "CommandInvoker" as I
+participant "TrafficService\n«Subject»" as T
+participant "NavigationSession\n«Observer»" as S
+participant "CachedRouteStrategy\n«Decorator»" as C
+participant "AdaptiveStrategy\n«Strategy»" as A
+participant "Grafo" as G
+
+== Inicio del despacho ==
+Operador -> UI : marca base y hospital
+UI -> API : POST /api/navigation
+API -> E : startNavigation(from, to)
+E -> S ** : new NavigationSession()
+E -> T : subscribe(session)
+E -> S : start()
+S -> C : findRoute(from, to)
+alt ruta en caché (misma versión del grafo)
+  C --> S : resultado (fromCache)
+else no está en caché
+  C -> A : findRoute(from, to)
+  A -> A : select() según distancia
+  A -> G : A* / Dijkstra / bidireccional
+  A --> C : SearchResult
+  C -> C : guardar (clave from>to@vN)
+  C --> S : SearchResult
+end
+S --> API : estado NAVIGATING
+API --> UI : ruta + instrucciones
+
+== Avance de la ambulancia ==
+loop cada 450 ms mientras NAVIGATING
+  UI -> API : POST /navigation/:id/advance
+  API -> E : advance(id)
+  E -> I : run(AdvanceCommand)
+end
+
+== Incidente ==
+Operador -> UI : "Cerrar vía adelante"
+UI -> API : POST /api/traffic/block
+API -> E : blockRoad(edgeId)
+E -> I : run(BlockRoadCommand)
+I -> T : blockRoad(edgeId)
+T -> G : updateEdge(blocked) / version++
+par notificación a todos los observadores
+  T -> S : onTrafficUpdate(evento)
+  opt la vía cerrada está en la ruta restante
+    S -> S : estado REROUTING
+    S -> C : findRoute(actual, destino)
+    note right : versión nueva: la caché\nse invalida sola
+    C --> S : nueva ruta
+    S -> S : estado NAVIGATING
+    S -->> UI : SSE "reroute" (latencia, costo)
+  end
+else
+  T -->> UI : SSE "traffic" (pinta la vía cerrada)
+end
+@enduml

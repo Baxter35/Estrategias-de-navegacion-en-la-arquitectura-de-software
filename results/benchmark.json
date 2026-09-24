@@ -1,0 +1,121 @@
+{
+  "date": "2026-09-24T02:07:48.768Z",
+  "node": "v24.18.0",
+  "scalability": [
+    {
+      "nodes": 900,
+      "algorithm": "dijkstra",
+      "trips": 100,
+      "avgMs": 0.19186099999999953,
+      "p95Ms": 0.4841999999999871,
+      "avgExpanded": 464.31
+    },
+    {
+      "nodes": 900,
+      "algorithm": "astar",
+      "trips": 100,
+      "avgMs": 0.06436300000000045,
+      "p95Ms": 0.20580000000001064,
+      "avgExpanded": 159.6
+    },
+    {
+      "nodes": 900,
+      "algorithm": "bidirectional",
+      "trips": 100,
+      "avgMs": 0.11824999999999988,
+      "p95Ms": 0.3521000000000072,
+      "avgExpanded": 243.83
+    },
+    {
+      "nodes": 900,
+      "algorithm": "adaptive",
+      "trips": 100,
+      "avgMs": 0.07728299999999934,
+      "p95Ms": 0.228999999999985,
+      "avgExpanded": 163.66
+    },
+    {
+      "nodes": 10000,
+      "algorithm": "dijkstra",
+      "trips": 60,
+      "avgMs": 2.64063,
+      "p95Ms": 5.261799999999994,
+      "avgExpanded": 5399.95
+    },
+    {
+      "nodes": 10000,
+      "algorithm": "astar",
+      "trips": 60,
+      "avgMs": 1.1559483333333322,
+      "p95Ms": 3.8806999999999903,
+      "avgExpanded": 1873.5833333333333
+    },
+    {
+      "nodes": 10000,
+      "algorithm": "bidirectional",
+      "trips": 60,
+      "avgMs": 1.9482183333333316,
+      "p95Ms": 4.722299999999905,
+      "avgExpanded": 3387.5333333333333
+    },
+    {
+      "nodes": 10000,
+      "algorithm": "adaptive",
+      "trips": 60,
+      "avgMs": 1.0978800000000015,
+      "p95Ms": 3.6118999999999915,
+      "avgExpanded": 1873.5833333333333
+    },
+    {
+      "nodes": 90000,
+      "algorithm": "dijkstra",
+      "trips": 20,
+      "avgMs": 42.75038499999998,
+      "p95Ms": 88.1567,
+      "avgExpanded": 46916
+    },
+    {
+      "nodes": 90000,
+      "algorithm": "astar",
+      "trips": 20,
+      "avgMs": 14.575525000000061,
+      "p95Ms": 48.11720000000014,
+      "avgExpanded": 13760.65
+    },
+    {
+      "nodes": 90000,
+      "algorithm": "bidirectional",
+      "trips": 20,
+      "avgMs": 28.46846499999997,
+      "p95Ms": 65.05009999999993,
+      "avgExpanded": 30161.35
+    },
+    {
+      "nodes": 90000,
+      "algorithm": "adaptive",
+      "trips": 20,
+      "avgMs": 13.388945000000081,
+      "p95Ms": 44.81140000000005,
+      "avgExpanded": 13760.65
+    }
+  ],
+  "archComparison": {
+    "requests": 1000,
+    "baselineTotalMs": 2536.6632999999993,
+    "optimizedTotalMs": 816.5601999999999,
+    "speedup": 3.1065233157334875,
+    "cache": {
+      "hits": 232,
+      "misses": 768,
+      "size": 500,
+      "hitRate": 0.232
+    }
+  },
+  "reroute": {
+    "samples": 40,
+    "avgMs": 3.0394374999998037,
+    "p95Ms": 7.552299999999377,
+    "maxMs": 8.220100000000457,
+    "avgExtraSeconds": 4.494243541683363
+  }
+}

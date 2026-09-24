@@ -1,0 +1,53 @@
+@startuml componentes
+title RutaViva - Diagrama de componentes
+skinparam componentStyle uml2
+skinparam shadowing false
+
+actor "Operador de despacho" as op
+
+package "Cliente web (public/index.html)" {
+  [Mapa Canvas] as ui
+  [Suscriptor SSE] as sse
+}
+
+package "Servidor Node.js (src/server.ts)" {
+  component "API REST\n(Express)" as api
+  component "Emisor de eventos\n(Server-Sent Events)" as events
+
+  package "Núcleo de navegación" {
+    component "RouteEngine\n«Facade»" as engine
+    component "Motor de rutas\n«Strategy»" as strategies
+    component "Caché LRU\n«Decorator»" as cache
+    component "Servicio de tráfico\n«Subject»" as traffic
+    component "Sesiones de navegación\n«Observer»" as sessions
+    component "Invocador de comandos\n«Command»" as invoker
+    component "Constructor de rutas\n«Composite / Iterator»" as route
+  }
+  database "Grafo vial\n(en memoria)" as graph
+}
+
+interface "HTTP/JSON" as http
+interface "text/event-stream" as stream
+interface "RouteStrategy" as IRoute
+interface "TrafficObserver" as IObs
+
+op --> ui
+ui --> http
+http - api
+api --> engine
+engine --> invoker
+engine --> cache
+cache - IRoute
+IRoute <.. strategies
+invoker --> traffic
+traffic --> IObs
+IObs <.. sessions
+sessions --> cache : recalcula
+sessions --> route : instrucciones
+strategies --> graph
+traffic --> graph
+sessions ..> events : reroute
+traffic ..> events : tráfico
+events - stream
+stream <.. sse
+@enduml
